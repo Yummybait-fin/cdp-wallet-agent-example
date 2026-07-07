@@ -1,0 +1,31 @@
+[
+  {
+    "name": "went_oor",
+    "when": "!in_range",
+    "cooldown": "1h",
+    "severity": "warn",
+    "note": "Position drifted out of range — consider rebalance or close."
+  },
+  {
+    "name": "il_high",
+    "when": "il_pct > 5.0",
+    "for": "15m",
+    "cooldown": "6h",
+    "severity": "warn",
+    "note": "Impermanent loss above 5%."
+  },
+  {
+    "name": "pnl_dropping",
+    "when": "pnl_usd_change_1d < -50.0",
+    "cooldown": "12h",
+    "severity": "warn",
+    "note": "PnL down >$50 over 24h."
+  },
+  {
+    "name": "fees_worth_collecting",
+    "when": "uncollected_fees_usd > 25.0",
+    "cooldown": "1d",
+    "severity": "info",
+    "note": "Uncollected fees above $25."
+  }
+]

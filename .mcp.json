@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "uniswap-tx-builder": {
+      "type": "http",
+      "url": "http://localhost:8102/mcp"
+    },
+    "cdp": {
+      "type": "sse",
+      "url": "http://localhost:8101/sse"
+    }
+  }
+}

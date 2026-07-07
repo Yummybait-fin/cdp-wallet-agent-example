@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+.env.local
+.state/
+*.log
+# Execution journal is runtime/user data — keep the schema doc, ignore the entries.
+logs/*.jsonl
+# Companion skills installed from public sources (see README "Run it") — not committed here.
+.claude/skills/uniswap-tx-builder/
+.claude/skills/swap-integration/
