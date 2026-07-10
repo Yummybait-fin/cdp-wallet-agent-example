@@ -40,24 +40,23 @@ until then the wallet has whatever policy (if any) your project already had.
 
 ## Process isolation
 
-`docker-compose.yml` runs the two MCPs as services (the agent is a local process that connects to
-them over HTTP). The **cdp-mcp** service is the only one that touches keys — for hardening, give it
-a **network egress allowlist** (only `api.cdp.coinbase.com`), no host filesystem mounts, and
-secrets via env at run time (never baked into an image). The **uniswap-tx-builder-mcp** service is
-keyless — it runs the published image
-[`ghcr.io/yummybait-fin/uniswap-tx-builder-mcp`](https://github.com/Yummybait-fin/uniswap-tx-builder-mcp);
-**pin an exact tag** (not `:latest`) so the image is reproducible and auditable.
+The MCPs run as **stdio child processes** spawned by Claude Code per session (`.mcp.json`) —
+no long-lived services, no listening ports. Only the **cdp** MCP touches keys: it reads them
+from the OS keyring (configured once via `cdp env live`, README "Run it" step 2); nothing
+key-bearing is written into this repo. The **uniswap-tx-builder** and **evm** MCPs are keyless.
 
 ## Supply chain
 
 This repo has **no application code or npm dependencies** — just config, prompts, and
-`docker-compose.yml`. The supply-chain surface is the three things compose pulls/builds:
+`.mcp.json`. The supply-chain surface is the three npm packages `npx` spawns:
 
-- **`@coinbase/cdp-cli`** (the key-touching one) — **pin an exact version** in `cdp-mcp.Dockerfile`
+- **`@coinbase/cdp-cli`** (the key-touching one) — **pin an exact version** in `.mcp.json`
   (not `@latest`), verify npm provenance (`npm audit signatures`), and review every bump.
-- **`mcp-proxy`** — pin the version in `cdp-mcp.Dockerfile`.
-- **`ghcr.io/yummybait-fin/uniswap-tx-builder-mcp`** image — pin the tag + verify the digest;
-  keyless, so bounded by the wallet policy anyway.
+- **`@yummybait/uniswap-tx-builder-mcp`** — pinned in `.mcp.json`; keyless, so bounded by the
+  wallet policy anyway.
+- **`@mcpdotdirect/evm-mcp-server`** — pinned in `.mcp.json`; read-only usage, keyless. A
+  compromised version could feed the agent **false chain state**, so treat bumps with the same
+  care as the others.
 
 Before bumping any of these: diff the release for new network calls / `child_process` / env-var
 access, prefer provenance-signed publishes, and run under egress monitoring in a sandbox first.

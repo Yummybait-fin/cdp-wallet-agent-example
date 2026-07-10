@@ -31,10 +31,17 @@ Check `config/policy.json` `mode`:
 
 The user's phrasing also matters: "just tell me / dry run" → observe even if `mode: act`.
 
-## Tools (see `.mcp.json`, served by docker-compose)
+## Tools (see `.mcp.json`; stdio servers spawned per session)
 
-- **uniswap-tx-builder** MCP (`http://localhost:8102`) — build unsigned collect/close/mint txs; keyless.
-- **cdp** MCP (`http://localhost:8101`) — Coinbase wallet; signs/broadcasts, bounded by the CDP policy.
+- **uniswap-tx-builder** MCP — build unsigned collect/close/mint txs; keyless.
+- **cdp** MCP — Coinbase wallet; signs/broadcasts, bounded by the CDP policy.
+  All signing goes through this MCP — never bypass it with direct SDK/REST calls.
+- **evm** MCP — read-only chain access: tx receipts (with decoded logs), balances, contract
+  reads. Use it instead of raw curl/RPC calls.
+
+If an MCP misbehaves (cdp: missing `X-Wallet-Auth` → re-run the `cdp env live` authorization
+per README "Run it" step 2, then ask the user to `/mcp`), see `docs/mcp-issues.md` before
+improvising.
 
 Mechanics live in **companion skills** (installed from public sources — see README → "Run it"):
 - **`uniswap-tx-builder`** — how to drive that MCP (collect/close/mint, simulate, close→mint rebalance).
@@ -42,6 +49,10 @@ Mechanics live in **companion skills** (installed from public sources — see RE
   Router, so they only succeed if the user added it to their CDP policy (README → "Enabling swaps");
   if not, close the position and report that swapping is disabled.
 - **`manage-liquidity`** orchestrates these per `STRATEGY.md`.
+- **`onchain-toolkit`** (project-local) — the standard MCP-chaining flow: `get_pool_state` →
+  `build_*` → send the returned `rlp` via cdp → verify via evm MCP → journal. **Never write
+  ad-hoc encoding/RPC code in the conversation.** Recompute mint amounts (`get_pool_state`
+  with balances) right before every mint.
 
 ## Hard limits (you cannot exceed these)
 

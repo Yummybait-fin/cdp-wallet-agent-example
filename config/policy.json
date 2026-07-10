@@ -2,6 +2,12 @@
   "mode": "observe",
   "maxTxUsd": 50,
   "maxSlippageBps": 50,
-  "allowedActions": ["collect", "close", "rebalance", "swap"],
-  "allowedChains": [1, 8453]
+  "allowedActions": ["collect", "close", "mint", "rebalance", "swap"],
+  "allowedChains": [1, 8453],
+  "allowedTokens": {
+    "8453": [
+      { "symbol": "WETH", "address": "0x4200000000000000000000000000000000000006" },
+      { "symbol": "USDC", "address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" }
+    ]
+  }
 }

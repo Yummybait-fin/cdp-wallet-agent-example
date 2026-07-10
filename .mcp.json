@@ -1,12 +1,19 @@
 {
   "mcpServers": {
     "uniswap-tx-builder": {
-      "type": "http",
-      "url": "http://localhost:8102/mcp"
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@yummybait/uniswap-tx-builder-mcp@0.3.1"]
     },
     "cdp": {
-      "type": "sse",
-      "url": "http://localhost:8101/sse"
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@coinbase/cdp-cli@2.0.18", "mcp"]
+    },
+    "evm": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@mcpdotdirect/evm-mcp-server@2.0.4"]
     }
   }
 }

@@ -2,8 +2,8 @@
 
 A reference for running a **local Claude agent** that watches **YummyBait** position signals and
 manages Uniswap v3 positions — **no runner program**. It's just **CLAUDE.md + skills + config**
-that your local Claude (Claude Code) follows, plus **MCP servers in docker-compose**. A
-non-technical user adjusts behavior in plain English and never touches code.
+that your local Claude (Claude Code) follows, plus **stdio MCP servers** it spawns on demand
+(`.mcp.json`). A non-technical user adjusts behavior in plain English and never touches code.
 
 ## How it's wired
 
@@ -12,20 +12,30 @@ non-technical user adjusts behavior in plain English and never touches code.
  signals    │  CLAUDE.md  ── you (local Claude) follow this each poll cycle          │
  API  ◄─────┤  .claude/skills/  yummybait-signals (poll+translate) · manage-liquidity│
    curl     │  STRATEGY.md (intent, plain English)  ·  config/ wallets·rules·policy  │
-            │  .mcp.json ──► http://localhost:8102  uniswap-tx-builder (keyless)      │
-            │            └─► http://localhost:8101  cdp (sign/broadcast, policy-bound)│
+            │  .mcp.json ──► uniswap-tx-builder (keyless, npx stdio)                  │
+            │            ├─► cdp (sign/broadcast, policy-bound, npx stdio)            │
+            │            └─► evm (read-only chain access, npx stdio)                  │
             └────────────────────────────────────────────────────────────────────────┘
-   the agent is LOCAL (Claude Code); the two MCPs + policy bootstrap run in docker-compose.
+   the agent is LOCAL (Claude Code); it spawns each MCP as a stdio child process per session.
 ```
 
 - **uniswap-tx-builder MCP** — public, keyless server
-  ([repo](https://github.com/Yummybait-fin/uniswap-tx-builder-mcp); stdio or streamable HTTP).
-  Builds unsigned `collect`/`close`/`mint`/`increase` txs (and `plan_position`/`simulate`), never
-  signs. Runs as a compose service on `:8102`.
-- **cdp MCP** — Coinbase's own wallet MCP, unmodified, exposed over HTTP/SSE by `mcp-proxy` on
-  `:8101`. Its CDP Wallet Policy is something **you apply to your CDP project** (see "Apply the
-  CDP policy") — enforced by Coinbase, not by this repo. We write no *signing* code.
+  ([repo](https://github.com/Yummybait-fin/uniswap-tx-builder-mcp) ·
+  [npm](https://www.npmjs.com/package/@yummybait/uniswap-tx-builder-mcp); stdio or streamable
+  HTTP). Builds unsigned `collect`/`close`/`mint`/`increase`/`wrap`/`swap` txs (plus
+  `get_pool_state`, `plan_position`, `simulate`, and ready-to-sign `rlp` output), never signs.
+- **cdp MCP** — Coinbase's own wallet MCP, unmodified (`npx @coinbase/cdp-cli mcp`). Its CDP
+  Wallet Policy is something **you apply to your CDP project** (see "Apply the CDP policy") —
+  enforced by Coinbase, not by this repo. We write no *signing* code. One-time authorization:
+  `cdp env live` (see "Run it" step 2).
+- **evm MCP** — read-only chain access (receipts with decoded logs, balances, contract reads),
+  `npx @mcpdotdirect/evm-mcp-server`. Keyless.
 - **Skills** carry the *behavior* (the decision playbook); **config** carries the *limits*.
+
+> **Remote deployments:** the tx-builder MCP also supports streamable HTTP (`MCP_HTTP_PORT`,
+> see its [repo](https://github.com/Yummybait-fin/uniswap-tx-builder-mcp)) if you ever need the
+> agent and MCPs on different hosts — point `.mcp.json` at the URL instead of a stdio command.
+> Out of scope for this repo.
 
 ## What a less-technical user edits
 
@@ -37,7 +47,7 @@ non-technical user adjusts behavior in plain English and never touches code.
 | `config/policy.json` | `mode` (observe/act) + caps: max USD/tx, slippage, allowed actions + chains |
 | `.env` | the signals key + CDP wallet creds |
 
-**No code.** Just `CLAUDE.md` + the two skills + config + `docker-compose.yml`; the agent is your
+**No code.** Just `CLAUDE.md` + the skills + config + `.mcp.json`; the agent is your
 local Claude. Write `STRATEGY.md` in **plain English with no metric names** — the
 `yummybait-signals` skill translates intent into `config/rules.json` (via the metrics catalog) and
 the `manage-liquidity` skill carries the tool *mechanics*.
@@ -66,25 +76,118 @@ There's no `EXECUTION_MODE` flag — the agent reads `mode` in `config/policy.js
 ## Apply the CDP policy (do this first, before `act`)
 
 The wallet's hard limits live in a **CDP Wallet Policy** you set on your CDP project — *not* in
-this repo. Apply one that lets the agent call **only the Uniswap NonfungiblePositionManager**, so
-a bug or bad prompt can't move funds anywhere else. The policy (matches `config/policy.json`
-`allowedChains` 1 + 8453 → their NFPM contracts):
+this repo. Apply one that lets the agent call **only the Uniswap NonfungiblePositionManager**
+(plus ERC-20 `approve` scoped to the NFPM as spender — required to *mint* new positions), so a
+bug or bad prompt can't move funds anywhere else. CDP policies are default-deny: a request that
+matches no `accept` rule is rejected. The policy (matches `config/policy.json` `allowedChains`
+1 + 8453 → their NFPM contracts, and `allowedTokens` → Base WETH/USDC for approvals):
 
 ```json
 {
   "scope": "project",
-  "description": "yummybait-agent: Uniswap NFPM allowlist",
+  "description": "yummybait agent. NFPM, approvals, swaps, no raw",
   "rules": [
+    { "action": "reject", "operation": "signEvmHash" },
     {
       "action": "reject",
+      "operation": "signEvmMessage",
+      "criteria": [{ "type": "evmMessage", "match": "(?s).*" }]
+    },
+    {
+      "action": "accept",
       "operation": "signEvmTransaction",
       "criteria": [
         {
           "type": "evmAddress",
-          "operator": "not in",
+          "operator": "in",
           "addresses": [
             "0xC36442b4a4522E871399CD717aBDD847Ab11FE88",
             "0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1"
+          ]
+        }
+      ]
+    },
+    {
+      "action": "accept",
+      "operation": "signEvmTransaction",
+      "criteria": [
+        {
+          "type": "evmAddress",
+          "operator": "in",
+          "addresses": [
+            "0x4200000000000000000000000000000000000006",
+            "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+          ]
+        },
+        {
+          "type": "evmData",
+          "abi": "erc20",
+          "conditions": [
+            {
+              "function": "approve",
+              "params": [
+                {
+                  "name": "spender",
+                  "operator": "in",
+                  "values": ["0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1"]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "action": "accept",
+      "operation": "sendEvmTransaction",
+      "criteria": [
+        { "type": "evmNetwork", "operator": "in", "networks": ["ethereum"] },
+        {
+          "type": "evmAddress",
+          "operator": "in",
+          "addresses": ["0xC36442b4a4522E871399CD717aBDD847Ab11FE88"]
+        }
+      ]
+    },
+    {
+      "action": "accept",
+      "operation": "sendEvmTransaction",
+      "criteria": [
+        { "type": "evmNetwork", "operator": "in", "networks": ["base"] },
+        {
+          "type": "evmAddress",
+          "operator": "in",
+          "addresses": ["0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1"]
+        }
+      ]
+    },
+    {
+      "action": "accept",
+      "operation": "sendEvmTransaction",
+      "criteria": [
+        { "type": "evmNetwork", "operator": "in", "networks": ["base"] },
+        {
+          "type": "evmAddress",
+          "operator": "in",
+          "addresses": [
+            "0x4200000000000000000000000000000000000006",
+            "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+          ]
+        },
+        {
+          "type": "evmData",
+          "abi": "erc20",
+          "conditions": [
+            {
+              "function": "approve",
+              "params": [
+                {
+                  "name": "spender",
+                  "operator": "in",
+                  "values": ["0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1"]
+                }
+              ]
+            }
           ]
         }
       ]
@@ -92,6 +195,19 @@ a bug or bad prompt can't move funds anywhere else. The policy (matches `config/
   ]
 }
 ```
+
+Rule notes: the two `evmData` rules let the wallet approve **only Base WETH/USDC** and **only
+with the Base NFPM or Permit2 as spender** — any other calldata to a token contract (e.g.
+`transfer`) falls through and is rejected. `evmNetwork` pins each contract address to its chain
+(supported on `sendEvmTransaction`; the `signEvmTransaction` rules are address-only, as the
+policy engine does not accept a network criterion there).
+
+> ⚠️ **The two `reject` rules at the top are load-bearing.** Operations with **no rules at all
+> are allowed by default** (verified empirically 2026-07-10: with no `signEvmHash` rule, the
+> wallet happily signed an arbitrary raw hash). A raw 32-byte hash can be the keccak of a
+> serialized transaction, so allowing `signEvmHash` is a full bypass of the address allowlist.
+> If you write your own policy, always end with explicit rejects for `signEvmHash` and
+> `signEvmMessage`.
 
 Apply it by **either**:
 
@@ -115,20 +231,30 @@ Apply it by **either**:
 
 ### Enabling swaps (for "exit to USD")
 
-The policy above allows **only** the NFPM, so LP actions (collect/close/rebalance) work but
-**swaps are rejected**. To let the agent swap (e.g. exit a position to USDC), add your chain's
-Uniswap **Universal Router** (and **Permit2**) to the `addresses` allowlist — see
+With only the rules above, LP actions (collect/close/mint/rebalance) work but **swaps are
+rejected**. To let the agent swap (e.g. exit a position to USDC, or convert native ETH into
+position tokens), add `accept` rules for your chain's Uniswap **Universal Router** and
+**Permit2** — see
 [Uniswap deployment addresses](https://docs.uniswap.org/contracts/v3/reference/deployments/).
-This is opt-in and *widens* what the agent can call, so only add it if you want the "exit to
-stable / token" patterns. Leave it out for LP-only management.
+This is opt-in and *widens* what the agent can call; leave it out for LP-only management.
+For Base, that means three more rules:
+
+- `signEvmTransaction` + `sendEvmTransaction` (network `base`) accepting calls to the official
+  Universal Router deployments — v1.2 `0x3fC91A3afd70395Cd496C647d5a6CC9D4B2b7FAD`,
+  v2.0 `0x6fF5693b99212Da76ad316178A184AB56D299b43`, v2.1
+  `0xf3A4F4094BD2C6C06cA2F61789d8727b8d1e7259` (the Trading API picks the router per route type);
+- Permit2 `0x000000000022D473030F116dDEE9F6B43aC78BA3` added as an allowed `approve` spender in
+  the ERC-20 rules above;
+- a `signEvmTypedData` rule accepting typed data whose verifying contract is Permit2, so the
+  wallet can sign Permit2 permits for CLASSIC routes.
 
 ## Run it
 
 **1. Install the companion skills** (project-scoped, into `.claude/skills/`):
 
 ```bash
-# a) uniswap-tx-builder — ships with the MCP repo:
-npx -p github:Yummybait-fin/uniswap-tx-builder-mcp uniswap-tx-builder-skill --project
+# a) uniswap-tx-builder — ships with the MCP package:
+npx -p @yummybait/uniswap-tx-builder-mcp uniswap-tx-builder-skill --project
 #    (or in Claude Code:  /plugin marketplace add Yummybait-fin/uniswap-tx-builder-mcp
 #                          /plugin install uniswap-tx-builder@yummybait)
 
@@ -137,15 +263,22 @@ npx -p github:Yummybait-fin/uniswap-tx-builder-mcp uniswap-tx-builder-skill --pr
 #    (or in Claude Code:  /plugin marketplace add uniswap/uniswap-ai → /plugin install uniswap-trading)
 ```
 
-**2. Start the MCPs:**
+**2. Configure credentials** (the MCPs themselves need no starting — Claude Code spawns them
+from `.mcp.json` per session):
 
 ```bash
-cp .env.example .env          # YBT_API_URL, YBT_SIGNALS_KEY, CDP_* (for act)
-docker compose up -d          # cdp-mcp(:8101) + uniswap-tx-builder-mcp(:8102, GHCR image)
+cp .env.example .env          # YBT_API_URL, YBT_SIGNALS_KEY
+
+# authorize the cdp MCP (one-time, only needed for act mode):
+npx -y @coinbase/cdp-cli env live --key-file path/to/key.json   # API key from the CDP portal
+npx -y @coinbase/cdp-cli env live --wallet-secret=<your-wallet-secret>
+npx -y @coinbase/cdp-cli env                                    # verify: shows "live" + key ID
 ```
 
-No clone or build needed — the tx-builder MCP is pulled as a published image
-(`ghcr.io/yummybait-fin/uniswap-tx-builder-mcp`); pin an exact tag for production.
+Secrets land in your OS keyring. (Keyring-less host? `--plaintext` has a known cdp-cli bug —
+see `docs/mcp-issues.md` #2 for the workaround.)
+
+All three MCPs are spawned via `npx` from published packages (versions pinned in `.mcp.json`).
 
 **3. Set your intent:** edit `STRATEGY.md`, `config/wallets.json`, `config/rules.json`, and
 `config/policy.json` (`mode`).
@@ -177,3 +310,4 @@ To go live, apply the CDP policy (above), set `"mode": "act"` in `config/policy.
   Put these in `.env`, then apply the **CDP Wallet Policy** (see "Apply the CDP policy"). Not
   needed for `observe` mode.
 - **Your local Claude Code** in this directory (it reads `CLAUDE.md`).
+- **Node 18+** (`npx` spawns all three MCPs).
