@@ -7,15 +7,15 @@ cadence), run the cycle below. Everything you need is in this repo.
 ## One poll cycle
 
 1. **Read intent + config.** `STRATEGY.md` (what the user wants, plain English),
-   `config/wallets.json`, `config/rules.json`, `config/policy.json`.
+   `config/wallets.json`, `config/rules.json`, `config/agent-config.json`.
 2. **Reconcile rules with the strategy.** Use the **`yummybait-signals`** skill to translate
    `STRATEGY.md` into CEL rules; if `config/rules.json` doesn't capture the strategy, edit it.
-   (Never loosen `config/policy.json`.)
+   (Never loosen `config/agent-config.json`.)
 3. **Poll the signals API.** Per the `yummybait-signals` skill: `POST $YBT_API_URL/v1/signals`
    with the persisted cursor + wallets + rules. Save the returned cursor to `.state/cursor`.
 4. **Act on each fire.** Follow `STRATEGY.md` and the **`manage-liquidity`** skill:
    build the tx with the **uniswap-tx-builder** MCP (simulate), then — only if acting is enabled
-   (see Mode) — sign/broadcast with the **cdp** MCP, within `config/policy.json`.
+   (see Mode) — sign/broadcast with the **cdp** MCP, within `config/agent-config.json`.
 5. **Report.** Say what you did (with tx hashes) or why you waited.
 6. **Log.** Append one JSON line per position decision to `logs/journal.jsonl` (`mkdir -p logs`
    first), following the schema in `logs/README.md` — **also in `observe` mode** (record what you
@@ -24,7 +24,7 @@ cadence), run the cycle below. Everything you need is in this repo.
 
 ## Mode (safety default)
 
-Check `config/policy.json` `mode`:
+Check `config/agent-config.json` `mode`:
 - `observe` (default) — **never sign or broadcast.** Do steps 1–3, reason about what you *would*
   do, and report. Do not call the cdp MCP's signing tools.
 - `act` — execute within policy.
@@ -43,23 +43,23 @@ If an MCP misbehaves (cdp: missing `X-Wallet-Auth` → re-run the `cdp env live`
 per README "Run it" step 2, then ask the user to `/mcp`), see `docs/mcp-issues.md` before
 improvising.
 
-Mechanics live in **companion skills** (installed from public sources — see README → "Run it"):
+Mechanics live in **companion skills** (`uniswap-tx-builder` is installed from its package —
+see README → "Run it"; `manage-liquidity` is project-local):
 - **`uniswap-tx-builder`** — how to drive that MCP (collect/close/mint, simulate, close→mint rebalance).
-- **`swap-integration`** — build a Uniswap swap for "exit to stable/token". Swaps hit the Universal
-  Router, so they only succeed if the user added it to their CDP policy (README → "Enabling swaps");
-  if not, close the position and report that swapping is disabled.
-- **`manage-liquidity`** orchestrates these per `STRATEGY.md`.
-- **`onchain-toolkit`** (project-local) — the standard MCP-chaining flow: `get_pool_state` →
-  `build_*` → send the returned `rlp` via cdp → verify via evm MCP → journal. **Never write
-  ad-hoc encoding/RPC code in the conversation.** Recompute mint amounts (`get_pool_state`
-  with balances) right before every mint.
+- **`manage-liquidity`** — orchestration *and* the standard MCP-chaining flow: pick the action
+  per `STRATEGY.md`, then `get_pool_state` → `build_*` → send the returned `rlp` via cdp →
+  verify via evm MCP → journal. **Never write ad-hoc encoding/RPC code in the conversation.**
+  Recompute mint amounts (`get_pool_state` with balances) right before every mint. Swaps
+  ("exit to stable/token") use the tx-builder MCP's `build_swap` — they hit the Universal
+  Router, so they only succeed if the user added it to their CDP policy (README → "Enabling
+  swaps"); if not, close the position and report that swapping is disabled.
 
 ## Hard limits (you cannot exceed these)
 
 - The CDP Wallet Policy (the user applies it to their CDP project — see README "Apply the CDP
   policy") rejects any tx that isn't a call to the Uniswap NonfungiblePositionManager — enforced
   by Coinbase, not by this prompt.
-- Stay within `config/policy.json`. When uncertain, do nothing and explain. Never invent wallets
+- Stay within `config/agent-config.json`. When uncertain, do nothing and explain. Never invent wallets
   or widen limits.
 
 ## Periodic operation

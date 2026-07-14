@@ -13,7 +13,7 @@ signed" lives in your **CDP activity log** (Coinbase, keyed on timestamp/signer/
   "mode": "observe",                  // observe | act
   "position_id": "1:12345",           // "{chain_id}:{token_id}" (or null for a no-position cycle)
   "signals": ["went_oor"],            // rule names that fired for this position
-  "decision": "exit_to_stable",       // collect | rebalance | exit_to_stable | exit_to_token | hold
+  "decision": "exit_to_stable",       // collect | rebalance | exit_to_stable | exit_to_token | hold | halt (stop-loss breach)
   "rationale": "OOR 40m, IL 6% > fees; strategy prefers cash",
   "txs": [                             // [] in observe mode
     { "action": "close", "hash": "0x…", "status": "confirmed" },

@@ -1,0 +1,111 @@
+{
+  "scope": "project",
+  "description": "yummybait agent: NFPM + scoped approvals, raw signing rejected",
+  "rules": [
+    { "action": "reject", "operation": "signEvmHash" },
+    {
+      "action": "reject",
+      "operation": "signEvmMessage",
+      "criteria": [{ "type": "evmMessage", "match": "(?s).*" }]
+    },
+    {
+      "action": "accept",
+      "operation": "signEvmTransaction",
+      "criteria": [
+        {
+          "type": "evmAddress",
+          "operator": "in",
+          "addresses": [
+            "0xC36442b4a4522E871399CD717aBDD847Ab11FE88",
+            "0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1"
+          ]
+        }
+      ]
+    },
+    {
+      "action": "accept",
+      "operation": "signEvmTransaction",
+      "criteria": [
+        {
+          "type": "evmAddress",
+          "operator": "in",
+          "addresses": [
+            "0x4200000000000000000000000000000000000006",
+            "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+          ]
+        },
+        {
+          "type": "evmData",
+          "abi": "erc20",
+          "conditions": [
+            {
+              "function": "approve",
+              "params": [
+                {
+                  "name": "spender",
+                  "operator": "in",
+                  "values": ["0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1"]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "action": "accept",
+      "operation": "sendEvmTransaction",
+      "criteria": [
+        { "type": "evmNetwork", "operator": "in", "networks": ["ethereum"] },
+        {
+          "type": "evmAddress",
+          "operator": "in",
+          "addresses": ["0xC36442b4a4522E871399CD717aBDD847Ab11FE88"]
+        }
+      ]
+    },
+    {
+      "action": "accept",
+      "operation": "sendEvmTransaction",
+      "criteria": [
+        { "type": "evmNetwork", "operator": "in", "networks": ["base"] },
+        {
+          "type": "evmAddress",
+          "operator": "in",
+          "addresses": ["0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1"]
+        }
+      ]
+    },
+    {
+      "action": "accept",
+      "operation": "sendEvmTransaction",
+      "criteria": [
+        { "type": "evmNetwork", "operator": "in", "networks": ["base"] },
+        {
+          "type": "evmAddress",
+          "operator": "in",
+          "addresses": [
+            "0x4200000000000000000000000000000000000006",
+            "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+          ]
+        },
+        {
+          "type": "evmData",
+          "abi": "erc20",
+          "conditions": [
+            {
+              "function": "approve",
+              "params": [
+                {
+                  "name": "spender",
+                  "operator": "in",
+                  "values": ["0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1"]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

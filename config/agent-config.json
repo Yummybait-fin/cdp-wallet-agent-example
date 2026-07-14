@@ -1,0 +1,7 @@
+{
+  "mode": "observe",
+  "maxTxUsd": 50,
+  "maxSlippageBps": 50,
+  "maxLossUsd": null,
+  "maxLossEth": null
+}

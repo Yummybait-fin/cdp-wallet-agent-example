@@ -9,3 +9,4 @@ logs/*.jsonl
 # Companion skills installed from public sources (see README "Run it") — not committed here.
 .claude/skills/uniswap-tx-builder/
 .claude/skills/swap-integration/
+wallets.json

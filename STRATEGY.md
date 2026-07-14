@@ -6,7 +6,7 @@ names:** describe what you want using the patterns below, and the agent translat
 rules + tool calls for you.
 
 > This sets *intent* only. Your hard spending limits live in the **CDP Wallet Policy** (and
-> `config/policy.json`); the agent can never exceed them — whatever you write here.
+> `config/agent-config.json`); the agent can never exceed them — whatever you write here.
 
 ## The action patterns (building blocks)
 

@@ -22,27 +22,33 @@ Build the request body from config + the persisted cursor, then POST it. Require
 and `YBT_SIGNALS_KEY` in your environment (the user sources `.env`).
 
 ```bash
-CURSOR=$(cat .state/cursor 2>/dev/null || echo null)
+# The API returns the cursor as a STRING and requires it sent back as a string — send it with
+# --arg (not --argjson, which would coerce a numeric-looking cursor to a number → 400). Missing
+# or "null" state means "no cursor yet" → send JSON null.
+CURSOR=$(cat .state/cursor 2>/dev/null || true)
 BODY=$(jq -n \
-  --argjson cursor "${CURSOR:-null}" \
+  --arg cursor "$CURSOR" \
   --slurpfile wallets config/wallets.json \
   --slurpfile rules config/rules.json \
-  '{cursor: $cursor, wallets: $wallets[0], rules: $rules[0]}')
+  '{cursor: (if ($cursor == "" or $cursor == "null") then null else $cursor end),
+    wallets: $wallets[0], rules: $rules[0]}')
 
 RESP=$(curl -s -X POST "$YBT_API_URL/v1/signals" \
   -H "Authorization: Bearer $YBT_SIGNALS_KEY" \
   -H "Content-Type: application/json" \
   -d "$BODY")
 
-# Persist the advanced cursor for the next poll, then read the fires.
-mkdir -p .state && echo "$RESP" | jq -r '.cursor' > .state/cursor
+# Persist the advanced cursor ONLY if the poll returned one — never clobber a good cursor with
+# "null" when the poll errored (a 4xx/5xx body has no .cursor).
+NEW=$(echo "$RESP" | jq -r '.cursor // empty')
+[ -n "$NEW" ] && { mkdir -p .state && printf '%s' "$NEW" > .state/cursor; }
 echo "$RESP" | jq '{fires, rule_errors}'
 ```
 
 - Send `?dry_run=1` (append to the URL) to *explain* rules without firing or advancing state —
   useful right after editing `config/rules.json`.
 - Each `fires[i]` has `rule`, `severity`, `note`, `position_id`, `chain_id`, `token_id`.
-- A 401 means a bad/missing `YBT_SIGNALS_KEY`.
+- The **cursor is an opaque string** — persist and resend it verbatim; never cast it to a number.
 
 ## Translating strategy → rules
 
@@ -68,9 +74,9 @@ Rule shape:
 
 ## Off-limits when editing config
 
-- **Never loosen `config/policy.json`** (USD cap, slippage, allowed actions/chains). You may
+- **Never loosen `config/agent-config.json`** (USD cap, slippage). You may
   *tighten* it if the strategy is more conservative — never widen it. (The CDP Wallet Policy
-  enforces the real ceiling regardless, but treat `policy.json` as the user's.)
+  enforces the real ceiling regardless, but treat `agent-config.json` as the user's.)
 - **Don't add addresses to `config/wallets.json`** — surface a suggestion in your report instead.
 
 ## Interpreting a position's live state
