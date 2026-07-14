@@ -1,0 +1,85 @@
+name: skill-scan
+
+# Scans the agent's instruction surface (.claude/skills/ + CLAUDE.md) with NVIDIA
+# SkillSpector for prompt injection, data exfiltration, and malicious patterns.
+# Static analysis only (--no-llm) so runs are deterministic and keyless.
+# Fails if any skill scores >50/100; refreshes the README badge on pushes to main.
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - ".github/badges/**"
+  pull_request:
+  schedule:
+    # Weekly re-scan: SkillSpector's detection patterns evolve even when this repo doesn't.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install SkillSpector (pinned)
+        run: uv tool install git+https://github.com/NVIDIA/skillspector.git@36cb67d8cc1848c6fbf739861e21b5438deb0a97
+
+      - name: Scan skills and CLAUDE.md
+        id: scan
+        run: |
+          skillspector scan .claude/skills/ --recursive --no-llm --format json --output skills-report.json || skills_failed=1
+          skillspector scan CLAUDE.md --no-llm --format json --output claude-md-report.json || claudemd_failed=1
+
+          skills_score=$(jq '.max_risk_score // .risk_assessment.score' skills-report.json)
+          claudemd_score=$(jq '.risk_assessment.score' claude-md-report.json)
+          score=$(( skills_score > claudemd_score ? skills_score : claudemd_score ))
+
+          if   [ "$score" -le 25 ]; then severity=LOW;      color=brightgreen
+          elif [ "$score" -le 50 ]; then severity=MEDIUM;   color=yellow
+          elif [ "$score" -le 75 ]; then severity=HIGH;     color=orange
+          else                           severity=CRITICAL; color=red
+          fi
+
+          echo "score=$score"       >> "$GITHUB_OUTPUT"
+          echo "severity=$severity" >> "$GITHUB_OUTPUT"
+          echo "color=$color"       >> "$GITHUB_OUTPUT"
+
+          echo "## SkillSpector scan: $score/100 ($severity)" >> "$GITHUB_STEP_SUMMARY"
+          jq -r '.skills[]? | "- \(.name): \(.risk_score)/100 (\(.risk_severity), \(.finding_count) findings)"' skills-report.json >> "$GITHUB_STEP_SUMMARY"
+          echo "- CLAUDE.md: $claudemd_score/100" >> "$GITHUB_STEP_SUMMARY"
+
+          if [ -n "$skills_failed" ] || [ -n "$claudemd_failed" ]; then
+            echo "SkillSpector risk score exceeds 50 — do not install. See step summary." >&2
+            exit 1
+          fi
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: skillspector-reports
+          path: "*-report.json"
+
+      - name: Refresh badge
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: |
+          mkdir -p .github/badges
+          jq -n --argjson score "${{ steps.scan.outputs.score }}" \
+                --arg severity "${{ steps.scan.outputs.severity }}" \
+                --arg color "${{ steps.scan.outputs.color }}" \
+            '{schemaVersion: 1, label: "skill scan", message: "\($score)/100 \($severity)", color: $color}' \
+            > .github/badges/skillspector.json
+
+          if ! git diff --quiet .github/badges/skillspector.json; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add .github/badges/skillspector.json
+            git commit -m "chore: refresh SkillSpector badge [skip ci]"
+            git push
+          fi

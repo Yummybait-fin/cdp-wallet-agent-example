@@ -1,5 +1,8 @@
 # agent-claude-cdp-example
 
+[![skill scan](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FYummybait-fin%2Fcdp-wallet-agent-example%2Fmain%2F.github%2Fbadges%2Fskillspector.json)](https://github.com/Yummybait-fin/cdp-wallet-agent-example/actions/workflows/skill-scan.yml)
+[![skill-scan workflow](https://github.com/Yummybait-fin/cdp-wallet-agent-example/actions/workflows/skill-scan.yml/badge.svg)](https://github.com/Yummybait-fin/cdp-wallet-agent-example/actions/workflows/skill-scan.yml)
+
 An AI agent that watches your Uniswap v3 liquidity positions and acts on **realtime signals** —
 collect fees, rebalance, exit. 
 There is no runner program: your local Claude (Claude Code) *is*
@@ -36,6 +39,12 @@ English (`STRATEGY.md`) and config.
   `npx`, versions pinned in `.mcp.json`. Nothing here to audit but prompts and JSON.
 - ✅ **Full audit trail.** Every decision (including "would do" in observe mode) is journaled to
   `logs/journal.jsonl`; the CDP activity log is the authoritative signing record.
+- ✅ **Skills scanned in CI.** Every push and a weekly cron run
+  [NVIDIA SkillSpector](https://github.com/NVIDIA/skillspector) over `.claude/skills/` and
+  `CLAUDE.md` (prompt injection, data exfiltration, malicious patterns) — the badge above shows
+  the current risk score, and CI fails on >50/100. A scan is a signal, not a guarantee
+  ([scanners can be evaded](https://www.helpnetsecurity.com/2026/07/09/malicious-ai-agent-skills-scan/));
+  the hard guarantee remains the CDP policy above.
 
 Details in [Trust model](#trust-model) below — including which limits are *hard*
 (Coinbase-enforced) vs *soft* (prompt-level).
