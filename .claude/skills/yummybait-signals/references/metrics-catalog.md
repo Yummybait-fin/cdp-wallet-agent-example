@@ -43,4 +43,4 @@ Use `for` for "sustained / and stays there" and `cooldown` to avoid repeated fir
 and `market.*` (ETH/BTC, Fear & Greed) exist in the full catalog but are **not populated** on
 the signals path yet — a rule referencing them evaluates to null and won't fire. A null metric
 makes the whole expression false, so rules degrade safely. (Full catalog:
-`../yummybait-backend/docs/docs/reference/metrics-catalog.md`.)
+<https://docs.yummybait.finance/reference/metrics-catalog/>.)

@@ -16,6 +16,13 @@ Pull-based: a sampler snapshots every open position ~once a minute; **you** poll
 `POST /v1/signals` with the wallets + your `config/rules.json`. A **fire** means a rule's CEL
 condition held for a position. Fires identify a position by `position_id = "{chain_id}:{token_id}"`.
 
+Full wire contract in the public docs — <https://docs.yummybait.finance/signals/> (overview),
+[`signals/polling/`](https://docs.yummybait.finance/signals/polling/),
+[`signals/payload/`](https://docs.yummybait.finance/signals/payload/),
+[`signals/versioning/`](https://docs.yummybait.finance/signals/versioning/), and
+[`signals/webhooks/`](https://docs.yummybait.finance/signals/webhooks/) if you ever move off
+polling.
+
 ## Polling (do this each cycle)
 
 Build the request body from config + the persisted cursor, then POST it. Requires `YBT_API_URL`
@@ -56,7 +63,7 @@ echo "$RESP" | jq '{fires, rule_errors}'
 2. For each thing the user cares about, find the metric(s) that express it — see
    **[references/metrics-catalog.md](references/metrics-catalog.md)** (the live, rule-usable
    surface with human meanings + a phrase→expression table). The full catalog, if you need more
-   context, is in the backend at `../yummybait-backend/docs/docs/reference/metrics-catalog.md`.
+   context, is the public docs at <https://docs.yummybait.finance/reference/metrics-catalog/>.
 3. Write or adjust `config/rules.json` (Read, then Edit/Write). You send it on the next poll —
    edits tune *future* detection, not fires you've already pulled.
 4. Keep it **valid JSON** (an array of rule objects) and reference only the **live** metric
