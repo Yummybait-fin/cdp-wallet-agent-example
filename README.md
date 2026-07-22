@@ -1,6 +1,8 @@
 # agent-claude-cdp-example
 
-[![skill scan](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FYummybait-fin%2Fcdp-wallet-agent-example%2Fmain%2F.github%2Fbadges%2Fskillspector.json)](https://github.com/Yummybait-fin/cdp-wallet-agent-example/actions/workflows/skill-scan.yml)
+[YummyBait](https://yummybait.finance?utm_source=gh) · [docs](https://docs.yummybait.finance/)
+
+[![skill scan](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FYummybait-fin%2Fcdp-wallet-agent-example%2Fbadges%2Fskillspector.json)](https://github.com/Yummybait-fin/cdp-wallet-agent-example/actions/workflows/skill-scan.yml)
 [![skill-scan workflow](https://github.com/Yummybait-fin/cdp-wallet-agent-example/actions/workflows/skill-scan.yml/badge.svg)](https://github.com/Yummybait-fin/cdp-wallet-agent-example/actions/workflows/skill-scan.yml)
 
 An AI agent that watches your Uniswap v3 liquidity positions and acts on **realtime signals** —
@@ -192,8 +194,11 @@ cursor.
 
 While tuning rules, append **`?dry_run=1`**: it explains which positions each rule *would* fire
 on (and which are `suppressed` by `for:`/`cooldown:`) **without firing or advancing the cursor**.
-The full wire contract — dry-run shape, auth errors, every field — is in the backend signals docs
-(`../yummybait-backend/docs/docs/signals/`).
+The full wire contract — dry-run shape, auth errors, every field — is in the public signals docs:
+<https://docs.yummybait.finance/signals/> (overview), plus
+[`polling/`](https://docs.yummybait.finance/signals/polling/),
+[`payload/`](https://docs.yummybait.finance/signals/payload/), and
+[`versioning/`](https://docs.yummybait.finance/signals/versioning/).
 
 ## Trust model
 
